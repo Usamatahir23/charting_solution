@@ -12,6 +12,8 @@ import {
   TimeScale,
 } from 'chart.js';
 import { Chart } from 'react-chartjs-2';
+// @ts-expect-error - chartjs-plugin-zoom types may not be perfect
+import zoomPlugin from 'chartjs-plugin-zoom';
 import 'chartjs-adapter-date-fns';
 import { OHLCVData, TradeData } from '../App';
 import './Chart.css';
@@ -25,7 +27,8 @@ ChartJS.register(
   Tooltip,
   Legend,
   BarElement,
-  TimeScale
+  TimeScale,
+  zoomPlugin
 );
 
 interface ChartProps {
@@ -35,6 +38,20 @@ interface ChartProps {
 
 const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
   const chartRef = useRef<ChartJS<'line', any>>(null);
+  
+  // Calculate initial visible range for large datasets
+  const getInitialXRange = useMemo(() => {
+    if (!ohlcvData.length) return null;
+    const totalCandles = ohlcvData.length;
+    
+    // For large datasets, show first 100 candles initially
+    if (totalCandles > 100) {
+      const startTime = new Date(ohlcvData[0].DateTime).getTime();
+      const endTime = new Date(ohlcvData[Math.min(100, totalCandles - 1)].DateTime).getTime();
+      return { min: startTime, max: endTime };
+    }
+    return null;
+  }, [ohlcvData]);
 
   // Custom candlestick drawing
   useEffect(() => {
@@ -53,15 +70,32 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
       const meta = chart.getDatasetMeta(0);
       const points = meta.data;
 
-      // Calculate candle width based on chart width and number of candles
-      const chartWidth = chart.width;
-      const candleCount = Math.min(ohlcvData.length, points.length);
-      const availableWidth = chartWidth * 0.8; // Use 80% of chart width
-      const candleWidth = Math.max(2, Math.min(8, availableWidth / candleCount));
-      const candleSpacing = candleWidth * 0.3; // 30% spacing between candles
+      // Calculate proper candle spacing and width
+      if (points.length < 2) return;
+      
+      // Calculate spacing between candles based on actual x positions
+      const xPositions: number[] = [];
+      points.forEach((point: any) => {
+        if (point.x !== undefined) {
+          xPositions.push(point.x);
+        }
+      });
+      
+      if (xPositions.length < 2) return;
+      
+      // Calculate average spacing between candles
+      let totalSpacing = 0;
+      for (let i = 1; i < xPositions.length; i++) {
+        totalSpacing += Math.abs(xPositions[i] - xPositions[i - 1]);
+      }
+      const avgSpacing = totalSpacing / (xPositions.length - 1);
+      
+      // Candle width should be 60-70% of spacing to prevent overlap
+      const candleWidth = Math.max(2, Math.min(avgSpacing * 0.65, 12));
+      const bodyWidth = candleWidth * 1.4; // Body is 40% wider
 
-      points.forEach((point, index) => {
-        if (index >= ohlcvData.length) return;
+      points.forEach((point: any, index: number) => {
+        if (index >= ohlcvData.length || point.x === undefined) return;
 
         const candle = ohlcvData[index];
         const x = point.x;
@@ -70,25 +104,64 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
         const low = chart.scales.y.getPixelForValue(candle.Low);
         const close = chart.scales.y.getPixelForValue(candle.Close);
 
-        // Draw wick (high-low line)
+        // Draw wick (high-low line) - thinner than body
         ctx.strokeStyle = candle.Close >= candle.Open ? '#26a69a' : '#ef5350';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 0.5; // Thinner wick
         ctx.beginPath();
         ctx.moveTo(x, high);
         ctx.lineTo(x, low);
         ctx.stroke();
 
-        // Draw body (open-close rectangle)
+        // Draw body (open-close rectangle) - wider than wick
         const bodyTop = Math.min(open, close);
         const bodyBottom = Math.max(open, close);
         const bodyHeight = Math.max(1, bodyBottom - bodyTop); // Minimum 1px height
 
         ctx.fillStyle = candle.Close >= candle.Open ? '#26a69a' : '#ef5350';
-        ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
+        ctx.fillRect(x - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight);
       });
     };
 
     chart.update();
+    
+    // Ensure tooltip appears above candles - use a more aggressive approach
+    const fixTooltipZIndex = () => {
+      const tooltips = document.querySelectorAll('.chartjs-tooltip');
+      tooltips.forEach((tooltip) => {
+        const el = tooltip as HTMLElement;
+        el.style.zIndex = '99999';
+        el.style.position = 'fixed';
+        el.style.pointerEvents = 'none';
+      });
+    };
+    
+    // Fix immediately
+    fixTooltipZIndex();
+    
+    // Set up observer to fix tooltip z-index when it appears
+    const observer = new MutationObserver(() => {
+      fixTooltipZIndex();
+    });
+    
+    const chartContainer = chart.canvas.parentElement?.parentElement || document.body;
+    observer.observe(chartContainer, { childList: true, subtree: true });
+    
+    // Also check periodically
+    const interval = setInterval(fixTooltipZIndex, 100);
+    
+    return () => {
+      observer.disconnect();
+      clearInterval(interval);
+    };
+  }, [ohlcvData]);
+
+  // Create a map of candles by DateTime for quick lookup
+  const candlesByDateTime = useMemo(() => {
+    const map = new Map<string, OHLCVData>();
+    ohlcvData.forEach(candle => {
+      map.set(candle.DateTime, candle);
+    });
+    return map;
   }, [ohlcvData]);
 
   // Create a map of trades by DateTime for quick lookup
@@ -116,21 +189,31 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
     const longTrades = tradesData.filter(trade => isLongTrade(trade));
     const shortTrades = tradesData.filter(trade => !isLongTrade(trade));
 
-    // Long trade markers (green)
-    const longEntryPoints = longTrades.map(trade => ({
-      x: new Date(trade.DateTime),
-      y: trade.Entry,
-      trade,
-      isLong: true
-    }));
+    // Long trade markers (green) - positioned at candle Low
+    const longEntryPoints = longTrades.map(trade => {
+      const candle = candlesByDateTime.get(trade.DateTime);
+      // Position at candle Low (below the candle)
+      const yPosition = candle ? candle.Low : trade.Entry;
+      return {
+        x: new Date(trade.DateTime),
+        y: yPosition,
+        trade,
+        isLong: true
+      };
+    });
 
-    // Short trade markers (red)
-    const shortEntryPoints = shortTrades.map(trade => ({
-      x: new Date(trade.DateTime),
-      y: trade.Entry,
-      trade,
-      isLong: false
-    }));
+    // Short trade markers (red) - positioned at candle High
+    const shortEntryPoints = shortTrades.map(trade => {
+      const candle = candlesByDateTime.get(trade.DateTime);
+      // Position at candle High (above the candle)
+      const yPosition = candle ? candle.High : trade.Entry;
+      return {
+        x: new Date(trade.DateTime),
+        y: yPosition,
+        trade,
+        isLong: false
+      };
+    });
 
     return {
       labels,
@@ -174,16 +257,54 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
     responsive: true,
     maintainAspectRatio: false,
     interaction: {
-      mode: 'index' as const,
+      mode: 'nearest' as const,
       intersect: false,
+      axis: 'xy' as const,
+    },
+    onHover: (event: any, activeElements: any[]) => {
+      if (event.native) {
+        event.native.target.style.cursor = activeElements.length > 0 ? 'pointer' : 'grab';
+      }
     },
     plugins: {
       legend: {
         display: true,
         position: 'top' as const,
       },
+      zoom: {
+        zoom: {
+          wheel: {
+            enabled: true,
+            speed: 0.1,
+          },
+          pinch: {
+            enabled: true,
+          },
+          mode: 'xy' as const,
+          scaleMode: 'xy' as const,
+        },
+        pan: {
+          enabled: true,
+          mode: 'xy' as const,
+          threshold: 5,
+          // @ts-ignore - modifierKey can be null/undefined to disable modifier requirement
+          modifierKey: null,
+        },
+        limits: {
+          x: { min: 'original', max: 'original' },
+          y: { min: 'original', max: 'original' },
+        },
+      },
       tooltip: {
         enabled: true,
+        position: 'nearest' as const,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderColor: '#666',
+        borderWidth: 1,
+        padding: 12,
+        displayColors: false,
         callbacks: {
           title: (context: any) => {
             if (!context || !context.length || context[0] === undefined) {
@@ -289,6 +410,10 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
           autoSkip: true,
           maxTicksLimit: 20,
         },
+        ...(getInitialXRange && {
+          min: getInitialXRange.min,
+          max: getInitialXRange.max,
+        }),
       },
       y: {
         title: {
@@ -309,6 +434,13 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
     window.location.reload(); // Simple way to reset, could be improved
   };
 
+  const handleResetZoom = () => {
+    if (chartRef.current) {
+      // @ts-ignore - resetZoom is added by chartjs-plugin-zoom
+      (chartRef.current as any).resetZoom();
+    }
+  };
+
   if (!ohlcvData.length) {
     return <div className="no-data">No chart data available</div>;
   }
@@ -317,12 +449,17 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
     <div className="chart-container">
       <div className="chart-header">
         <h2>Trading Chart</h2>
-        <button onClick={handleBackToUpload} className="back-btn">
-          Upload New Files
-        </button>
+        <div className="chart-controls">
+          <button onClick={handleResetZoom} className="reset-zoom-btn">
+            Reset Zoom
+          </button>
+          <button onClick={handleBackToUpload} className="back-btn">
+            Upload New Files
+          </button>
+        </div>
       </div>
 
-      <div className="chart-wrapper">
+      <div className="chart-wrapper" style={{ cursor: 'grab' }}>
         <Chart
           ref={chartRef}
           type="line"
@@ -341,11 +478,23 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
           <span className="value">{tradesData.length}</span>
         </div>
         <div className="info-item">
-          <span className="label">Period:</span>
+          <span className="label">Start Date:</span>
           <span className="value">
-            {ohlcvData.length > 0 ? `${new Date(ohlcvData[0].DateTime).toLocaleDateString()} - ${new Date(ohlcvData[ohlcvData.length - 1].DateTime).toLocaleDateString()}` : 'N/A'}
+            {ohlcvData.length > 0 ? new Date(ohlcvData[0].DateTime).toLocaleString() : 'N/A'}
           </span>
         </div>
+        <div className="info-item">
+          <span className="label">End Date:</span>
+          <span className="value">
+            {ohlcvData.length > 0 ? new Date(ohlcvData[ohlcvData.length - 1].DateTime).toLocaleString() : 'N/A'}
+          </span>
+        </div>
+      </div>
+
+      <div className="chart-instructions">
+        <p>
+          <strong>Zoom:</strong> Scroll with mouse wheel | <strong>Pan:</strong> Click and drag to scroll left/right (time) and up/down (price) | <strong>Reset:</strong> Click Reset Zoom button
+        </p>
       </div>
     </div>
   );

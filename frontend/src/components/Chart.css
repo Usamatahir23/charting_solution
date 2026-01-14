@@ -21,8 +21,14 @@
   font-size: 2rem;
 }
 
+.chart-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.reset-zoom-btn,
 .back-btn {
-  background-color: #3498db;
   color: white;
   border: none;
   padding: 10px 20px;
@@ -30,6 +36,19 @@
   cursor: pointer;
   font-weight: 600;
   transition: background-color 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.reset-zoom-btn {
+  background-color: #95a5a6;
+}
+
+.reset-zoom-btn:hover {
+  background-color: #7f8c8d;
+}
+
+.back-btn {
+  background-color: #3498db;
 }
 
 .back-btn:hover {
@@ -40,6 +59,8 @@
   height: 600px;
   margin-bottom: 30px;
   position: relative;
+  overflow: visible;
+  z-index: 1;
 }
 
 .chart-info {
@@ -50,6 +71,22 @@
   background-color: #f8f9fa;
   border-radius: 8px;
   flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+
+
+.chart-instructions {
+  text-align: center;
+  padding: 10px;
+  background-color: #e8f4f8;
+  border-radius: 6px;
+  border-left: 3px solid #3498db;
+}
+
+.chart-instructions p {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 0.85rem;
 }
 
 .info-item {
@@ -98,14 +135,54 @@
   color: #34495e;
 }
 
-/* Tooltip styling */
+/* Tooltip styling - ensure it's always on top */
+.chartjs-tooltip,
+.chartjs-tooltip * {
+  z-index: 99999 !important;
+  position: fixed !important;
+  pointer-events: none !important;
+}
+
 .chartjs-tooltip {
-  background-color: rgba(0, 0, 0, 0.8) !important;
+  background-color: rgba(0, 0, 0, 0.95) !important;
   color: white !important;
   border-radius: 6px !important;
-  padding: 10px !important;
-  font-size: 12px !important;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2) !important;
+  padding: 12px !important;
+  font-size: 13px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  font-weight: 500 !important;
+}
+
+.chartjs-tooltip-title {
+  font-weight: bold !important;
+  margin-bottom: 8px !important;
+  font-size: 14px !important;
+  color: #fff !important;
+}
+
+.chartjs-tooltip-body {
+  color: #fff !important;
+}
+
+.chartjs-tooltip-body li {
+  margin: 4px 0 !important;
+  color: #fff !important;
+}
+
+.chart-wrapper {
+  position: relative;
+  z-index: 1;
+  cursor: grab;
+}
+
+.chart-wrapper:active {
+  cursor: grabbing;
+}
+
+.chart-wrapper canvas {
+  position: relative;
+  z-index: 1;
 }
 
 .chartjs-tooltip-title {
