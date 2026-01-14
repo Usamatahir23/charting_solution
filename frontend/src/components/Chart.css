@@ -21,8 +21,14 @@
   font-size: 2rem;
 }
 
+.chart-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.reset-zoom-btn,
 .back-btn {
-  background-color: #3498db;
   color: white;
   border: none;
   padding: 10px 20px;
@@ -30,6 +36,19 @@
   cursor: pointer;
   font-weight: 600;
   transition: background-color 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.reset-zoom-btn {
+  background-color: #95a5a6;
+}
+
+.reset-zoom-btn:hover {
+  background-color: #7f8c8d;
+}
+
+.back-btn {
+  background-color: #3498db;
 }
 
 .back-btn:hover {
@@ -50,6 +69,21 @@
   background-color: #f8f9fa;
   border-radius: 8px;
   flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+
+.chart-instructions {
+  text-align: center;
+  padding: 10px;
+  background-color: #e8f4f8;
+  border-radius: 6px;
+  border-left: 3px solid #3498db;
+}
+
+.chart-instructions p {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 0.85rem;
 }
 
 .info-item {
