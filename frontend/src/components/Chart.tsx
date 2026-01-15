@@ -12,7 +12,6 @@ import {
   TimeScale,
 } from 'chart.js';
 import { Chart } from 'react-chartjs-2';
-// @ts-expect-error - chartjs-plugin-zoom types may not be perfect
 import zoomPlugin from 'chartjs-plugin-zoom';
 import 'chartjs-adapter-date-fns';
 import { OHLCVData, TradeData } from '../App';
@@ -70,32 +69,41 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
       const meta = chart.getDatasetMeta(0);
       const points = meta.data;
 
-      // Calculate proper candle spacing and width
+      // Calculate proper candle spacing like TradingView
       if (points.length < 2) return;
       
-      // Calculate spacing between candles based on actual x positions
+      // Get all x positions
       const xPositions: number[] = [];
       points.forEach((point: any) => {
-        if (point.x !== undefined) {
+        if (point.x !== undefined && !isNaN(point.x)) {
           xPositions.push(point.x);
         }
       });
       
       if (xPositions.length < 2) return;
       
-      // Calculate average spacing between candles
-      let totalSpacing = 0;
+      // Calculate average spacing between adjacent candles
+      const spacings: number[] = [];
       for (let i = 1; i < xPositions.length; i++) {
-        totalSpacing += Math.abs(xPositions[i] - xPositions[i - 1]);
+        const spacing = Math.abs(xPositions[i] - xPositions[i - 1]);
+        if (spacing > 0) {
+          spacings.push(spacing);
+        }
       }
-      const avgSpacing = totalSpacing / (xPositions.length - 1);
       
-      // Candle width should be 60-70% of spacing to prevent overlap
-      const candleWidth = Math.max(2, Math.min(avgSpacing * 0.65, 12));
-      const bodyWidth = candleWidth * 1.4; // Body is 40% wider
+      if (spacings.length === 0) return;
+      
+      // Use median spacing for more consistent results
+      spacings.sort((a, b) => a - b);
+      const medianSpacing = spacings[Math.floor(spacings.length / 2)];
+      
+      // Candle width should be 60-70% of spacing to leave gap between candles
+      const candleWidth = Math.max(2, Math.min(medianSpacing * 0.65, 15));
+      const bodyWidth = candleWidth * 1.3; // Body is 30% wider than base width
+      const wickWidth = 0.5; // Thin wick
 
       points.forEach((point: any, index: number) => {
-        if (index >= ohlcvData.length || point.x === undefined) return;
+        if (index >= ohlcvData.length || point.x === undefined || isNaN(point.x)) return;
 
         const candle = ohlcvData[index];
         const x = point.x;
@@ -104,9 +112,9 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
         const low = chart.scales.y.getPixelForValue(candle.Low);
         const close = chart.scales.y.getPixelForValue(candle.Close);
 
-        // Draw wick (high-low line) - thinner than body
+        // Draw wick (high-low line) - thin line
         ctx.strokeStyle = candle.Close >= candle.Open ? '#26a69a' : '#ef5350';
-        ctx.lineWidth = 0.5; // Thinner wick
+        ctx.lineWidth = wickWidth;
         ctx.beginPath();
         ctx.moveTo(x, high);
         ctx.lineTo(x, low);
@@ -115,7 +123,7 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
         // Draw body (open-close rectangle) - wider than wick
         const bodyTop = Math.min(open, close);
         const bodyBottom = Math.max(open, close);
-        const bodyHeight = Math.max(1, bodyBottom - bodyTop); // Minimum 1px height
+        const bodyHeight = Math.max(1, bodyBottom - bodyTop);
 
         ctx.fillStyle = candle.Close >= candle.Open ? '#26a69a' : '#ef5350';
         ctx.fillRect(x - bodyWidth / 2, bodyTop, bodyWidth, bodyHeight);
@@ -281,18 +289,24 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
             enabled: true,
           },
           mode: 'xy' as const,
+<<<<<<< HEAD
           scaleMode: 'xy' as const,
+=======
+>>>>>>> 639d7cb (Fix candle spacing and pan/scroll functionality)
         },
         pan: {
           enabled: true,
           mode: 'xy' as const,
           threshold: 5,
+<<<<<<< HEAD
           // @ts-ignore - modifierKey can be null/undefined to disable modifier requirement
           modifierKey: null,
+=======
+>>>>>>> 639d7cb (Fix candle spacing and pan/scroll functionality)
         },
         limits: {
-          x: { min: 'original', max: 'original' },
-          y: { min: 'original', max: 'original' },
+          x: { min: 'original' as const, max: 'original' as const },
+          y: { min: 'original' as const, max: 'original' as const },
         },
       },
       tooltip: {
@@ -493,7 +507,11 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
 
       <div className="chart-instructions">
         <p>
+<<<<<<< HEAD
           <strong>Zoom:</strong> Scroll with mouse wheel | <strong>Pan:</strong> Click and drag to scroll left/right (time) and up/down (price) | <strong>Reset:</strong> Click Reset Zoom button
+=======
+          <strong>Zoom:</strong> Scroll with mouse wheel | <strong>Pan/Scroll:</strong> Click and drag to move left/right (time) and up/down (price) | <strong>Reset:</strong> Click Reset Zoom button
+>>>>>>> 639d7cb (Fix candle spacing and pan/scroll functionality)
         </p>
       </div>
     </div>
