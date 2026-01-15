@@ -289,20 +289,12 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
             enabled: true,
           },
           mode: 'xy' as const,
-<<<<<<< HEAD
           scaleMode: 'xy' as const,
-=======
->>>>>>> 639d7cb (Fix candle spacing and pan/scroll functionality)
         },
         pan: {
           enabled: true,
           mode: 'xy' as const,
           threshold: 5,
-<<<<<<< HEAD
-          // @ts-ignore - modifierKey can be null/undefined to disable modifier requirement
-          modifierKey: null,
-=======
->>>>>>> 639d7cb (Fix candle spacing and pan/scroll functionality)
         },
         limits: {
           x: { min: 'original' as const, max: 'original' as const },
@@ -507,11 +499,7 @@ const ChartComponent: React.FC<ChartProps> = ({ ohlcvData, tradesData }) => {
 
       <div className="chart-instructions">
         <p>
-<<<<<<< HEAD
-          <strong>Zoom:</strong> Scroll with mouse wheel | <strong>Pan:</strong> Click and drag to scroll left/right (time) and up/down (price) | <strong>Reset:</strong> Click Reset Zoom button
-=======
           <strong>Zoom:</strong> Scroll with mouse wheel | <strong>Pan/Scroll:</strong> Click and drag to move left/right (time) and up/down (price) | <strong>Reset:</strong> Click Reset Zoom button
->>>>>>> 639d7cb (Fix candle spacing and pan/scroll functionality)
         </p>
       </div>
     </div>
